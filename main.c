@@ -25,10 +25,14 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <sys/select.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <unistd.h>
 
 #define SOCKET_PATH "/tmp/daemon_socket_example.sock"
 #define BUFFER_SIZE 256
+#define TCP_PORT 12345
 
 /**
  * @brief Handles termination signals for the daemon.
@@ -107,20 +111,23 @@ static int daemonize(void)
 }
 
 /**
- * @brief Starts the daemon and serves incoming Unix socket clients.
+ * @brief Starts the daemon and serves incoming Unix socket clients and a TCP
+ *        socket for external connections.
  *
  * This entry point turns the process into a daemon, creates a Unix domain
- * socket, listens for connections, and processes incoming client data until
- * interrupted.
+ * socket, a TCP socket, listens for connections on both, and processes
+ * incoming client data until interrupted.
  *
  * @return 0 on successful shutdown, 1 if the daemon setup or socket setup
  *         fails.
  */
 int main(void)
 {
-    int server_fd = -1;
+    int unix_fd = -1;
+    int tcp_fd = -1;
     int client_fd = -1;
     struct sockaddr_un address;
+    struct sockaddr_in tcp_addr;
     char buffer[BUFFER_SIZE];
     ssize_t received = 0;
 
@@ -133,58 +140,145 @@ int main(void)
     unlink(SOCKET_PATH);
 
     /* Create a Unix domain socket for local IPC. */
-    server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (server_fd < 0) {
-        perror("socket");
+    unix_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (unix_fd < 0) {
+        perror("unix socket");
         return 1;
     }
 
-    /* Configure the socket address and bind it to the well-known path. */
+    /* Configure the unix socket address and bind it to the well-known path. */
     memset(&address, 0, sizeof(address));
     address.sun_family = AF_UNIX;
     snprintf(address.sun_path, sizeof(address.sun_path), "%s", SOCKET_PATH);
 
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("bind");
-        close(server_fd);
+    if (bind(unix_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        perror("unix bind");
+        close(unix_fd);
         return 1;
     }
 
-    /* Listen for incoming client connections. */
-    if (listen(server_fd, 5) < 0) {
-        perror("listen");
-        close(server_fd);
+    /* Listen for incoming unix client connections. */
+    if (listen(unix_fd, 5) < 0) {
+        perror("unix listen");
+        close(unix_fd);
+        unlink(SOCKET_PATH);
         return 1;
     }
 
-    /* Accept clients forever. */
+    /* Create TCP socket for external connections. */
+    tcp_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (tcp_fd < 0) {
+        perror("tcp socket");
+        close(unix_fd);
+        unlink(SOCKET_PATH);
+        return 1;
+    }
+
+    int opt = 1;
+    if (setsockopt(tcp_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt");
+        close(tcp_fd);
+        close(unix_fd);
+        unlink(SOCKET_PATH);
+        return 1;
+    }
+
+    memset(&tcp_addr, 0, sizeof(tcp_addr));
+    tcp_addr.sin_family = AF_INET;
+    tcp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    tcp_addr.sin_port = htons(TCP_PORT);
+
+    if (bind(tcp_fd, (struct sockaddr *)&tcp_addr, sizeof(tcp_addr)) < 0) {
+        perror("tcp bind");
+        close(tcp_fd);
+        close(unix_fd);
+        unlink(SOCKET_PATH);
+        return 1;
+    }
+
+    if (listen(tcp_fd, 5) < 0) {
+        perror("tcp listen");
+        close(tcp_fd);
+        close(unix_fd);
+        unlink(SOCKET_PATH);
+        return 1;
+    }
+
+    /* Serve incoming connections on both sockets. */
     while (1) {
-        client_fd = accept(server_fd, NULL, NULL);
-        if (client_fd < 0) {
+        fd_set readfds;
+        int max_fd = (unix_fd > tcp_fd) ? unix_fd : tcp_fd;
+
+        FD_ZERO(&readfds);
+        FD_SET(unix_fd, &readfds);
+        FD_SET(tcp_fd, &readfds);
+
+        if (select(max_fd + 1, &readfds, NULL, NULL, NULL) < 0) {
             if (errno == EINTR) {
                 continue;
             }
-            perror("accept");
+            perror("select");
             break;
         }
 
-        /* Receive data from the client and echo it to stdout. */
-        while ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
-            buffer[received] = '\0';
-            printf("Received: %s\n", buffer);
-            fflush(stdout);
+        /* Incoming connection on the Unix domain socket */
+        if (FD_ISSET(unix_fd, &readfds)) {
+            client_fd = accept(unix_fd, NULL, NULL);
+            if (client_fd < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                perror("accept (unix)");
+                break;
+            }
+
+            while ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+                buffer[received] = '\0';
+                printf("Unix Received: %s\n", buffer);
+                fflush(stdout);
+            }
+
+            if (received < 0 && errno != EINTR) {
+                perror("recv (unix)");
+            }
+
+            close(client_fd);
+            client_fd = -1;
         }
 
-        if (received < 0 && errno != EINTR) {
-            perror("recv");
-        }
+        /* Incoming connection on the TCP socket */
+        if (FD_ISSET(tcp_fd, &readfds)) {
+            client_fd = accept(tcp_fd, NULL, NULL);
+            if (client_fd < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                perror("accept (tcp)");
+                break;
+            }
 
-        close(client_fd);
+            while ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+                buffer[received] = '\0';
+                printf("TCP Received: %s\n", buffer);
+                fflush(stdout);
+            }
+
+            if (received < 0 && errno != EINTR) {
+                perror("recv (tcp)");
+            }
+
+            close(client_fd);
+            client_fd = -1;
+        }
     }
 
     /* Cleanup before exit. */
-    unlink(SOCKET_PATH);
-    close(server_fd);
+    if (tcp_fd >= 0) close(tcp_fd);
+    if (unix_fd >= 0) {
+        close(unix_fd);
+        unlink(SOCKET_PATH);
+    }
+
     return 0;
 }
 
