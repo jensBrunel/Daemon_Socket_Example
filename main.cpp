@@ -11,6 +11,7 @@
  * @date 2026-08-27
  */
 
+#include "Socket.hpp"
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -82,11 +83,7 @@ static int daemonize(void)
 
 int main()
 {
-    int unix_fd = -1;
-    int tcp_fd = -1;
     int client_fd = -1;
-    struct sockaddr_un address;
-    struct sockaddr_in tcp_addr;
     char buffer[BUFFER_SIZE];
     ssize_t received = 0;
 
@@ -94,68 +91,47 @@ int main()
         return 1;
     }
 
+    // Create Unix domain socket
+    Socket unix_socket(SocketType::UNIX_DOMAIN);
+    if (unix_socket.initUnixSocket(SOCKET_PATH) < 0) {
+        return 1;
+    }
+
+    // Remove old socket file if it exists
     unlink(SOCKET_PATH);
 
-    unix_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (unix_fd < 0) {
-        perror("unix socket");
+    // Bind and listen on Unix socket
+    if (unix_socket.bind() < 0) {
         return 1;
     }
 
-    memset(&address, 0, sizeof(address));
-    address.sun_family = AF_UNIX;
-    snprintf(address.sun_path, sizeof(address.sun_path), "%s", SOCKET_PATH);
-
-    if (bind(unix_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("unix bind");
-        close(unix_fd);
+    if (unix_socket.listen(5) < 0) {
         return 1;
     }
 
-    if (listen(unix_fd, 5) < 0) {
-        perror("unix listen");
-        close(unix_fd);
-        unlink(SOCKET_PATH);
+    // Create TCP socket
+    Socket tcp_socket(SocketType::TCP);
+    if (tcp_socket.initTcpSocket(TCP_PORT) < 0) {
+        unix_socket.close();
+        unix_socket.cleanupUnixSocket();
         return 1;
     }
 
-    tcp_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (tcp_fd < 0) {
-        perror("tcp socket");
-        close(unix_fd);
-        unlink(SOCKET_PATH);
+    // Bind and listen on TCP socket
+    if (tcp_socket.bind() < 0) {
+        unix_socket.close();
+        unix_socket.cleanupUnixSocket();
         return 1;
     }
 
-    int opt = 1;
-    if (setsockopt(tcp_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        perror("setsockopt");
-        close(tcp_fd);
-        close(unix_fd);
-        unlink(SOCKET_PATH);
+    if (tcp_socket.listen(5) < 0) {
+        unix_socket.close();
+        unix_socket.cleanupUnixSocket();
         return 1;
     }
 
-    memset(&tcp_addr, 0, sizeof(tcp_addr));
-    tcp_addr.sin_family = AF_INET;
-    tcp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    tcp_addr.sin_port = htons(TCP_PORT);
-
-    if (bind(tcp_fd, (struct sockaddr *)&tcp_addr, sizeof(tcp_addr)) < 0) {
-        perror("tcp bind");
-        close(tcp_fd);
-        close(unix_fd);
-        unlink(SOCKET_PATH);
-        return 1;
-    }
-
-    if (listen(tcp_fd, 5) < 0) {
-        perror("tcp listen");
-        close(tcp_fd);
-        close(unix_fd);
-        unlink(SOCKET_PATH);
-        return 1;
-    }
+    int unix_fd = unix_socket.getFileDescriptor();
+    int tcp_fd = tcp_socket.getFileDescriptor();
 
     while (1) {
         fd_set readfds;
@@ -174,12 +150,11 @@ int main()
         }
 
         if (FD_ISSET(unix_fd, &readfds)) {
-            client_fd = accept(unix_fd, NULL, NULL);
+            client_fd = unix_socket.accept();
             if (client_fd < 0) {
                 if (errno == EINTR) {
                     continue;
                 }
-                perror("accept (unix)");
                 break;
             }
 
@@ -198,12 +173,11 @@ int main()
         }
 
         if (FD_ISSET(tcp_fd, &readfds)) {
-            client_fd = accept(tcp_fd, NULL, NULL);
+            client_fd = tcp_socket.accept();
             if (client_fd < 0) {
                 if (errno == EINTR) {
                     continue;
                 }
-                perror("accept (tcp)");
                 break;
             }
 
@@ -222,11 +196,9 @@ int main()
         }
     }
 
-    if (tcp_fd >= 0) close(tcp_fd);
-    if (unix_fd >= 0) {
-        close(unix_fd);
-        unlink(SOCKET_PATH);
-    }
+    unix_socket.close();
+    unix_socket.cleanupUnixSocket();
+    tcp_socket.close();
 
     return 0;
 }

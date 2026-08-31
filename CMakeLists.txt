@@ -47,7 +47,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall -Wextra")
 
 # Sources (C++ entrypoint)
-add_executable(daemon_socket_example main.cpp)
+add_executable(daemon_socket_example main.cpp Socket.cpp)
 
 # Install target
 install(TARGETS daemon_socket_example DESTINATION bin)
