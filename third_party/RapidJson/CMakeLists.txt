@@ -195,7 +195,10 @@ install(FILES readme.md
 # Add an interface target to export it
 add_library(RapidJSON INTERFACE)
 
-target_include_directories(RapidJSON INTERFACE $<INSTALL_INTERFACE:include>)
+target_include_directories(RapidJSON INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
 
 install(DIRECTORY include/rapidjson
     DESTINATION "${INCLUDE_INSTALL_DIR}"
