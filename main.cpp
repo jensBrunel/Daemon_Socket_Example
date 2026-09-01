@@ -136,15 +136,15 @@ int main()
     }
 
     int unix_fd = unix_socket.getFileDescriptor();
-    int tcp_fd = cliPassSocket.getFileDescriptor();
+    int tcp_cliFd = cliPassSocket.getFileDescriptor();
 
     while (1) {
         fd_set readfds;
-        int max_fd = (unix_fd > tcp_fd) ? unix_fd : tcp_fd;
+        int max_fd = (unix_fd > tcp_cliFd) ? unix_fd : tcp_cliFd;
 
         FD_ZERO(&readfds);
         FD_SET(unix_fd, &readfds);
-        FD_SET(tcp_fd, &readfds);
+        FD_SET(tcp_cliFd, &readfds);
 
         if (select(max_fd + 1, &readfds, NULL, NULL, NULL) < 0) {
             if (errno == EINTR) {
@@ -177,7 +177,7 @@ int main()
             client_fd = -1;
         }
 
-        if (FD_ISSET(tcp_fd, &readfds)) {
+        if (FD_ISSET(tcp_cliFd, &readfds)) {
             client_fd = cliPassSocket.accept();
             if (client_fd < 0) {
                 if (errno == EINTR) {
