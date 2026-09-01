@@ -12,6 +12,7 @@
  */
 
 #include "Socket.h"
+#include "IniConfig.h"
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -25,8 +26,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <string>
 
-#define SOCKET_PATH "/tmp/daemon_socket_example.sock"
 #define BUFFER_SIZE 256
 #define TCP_PORT 12345
 
@@ -87,18 +88,22 @@ int main()
     char buffer[BUFFER_SIZE];
     ssize_t received = 0;
 
+    // Load socket path from configuration (if available)
+    IniConfig cfg;
+    std::string socket_path = cfg.getSocketPath();
+
     if (daemonize() != 0) {
         return 1;
     }
 
     // Create Unix domain socket
     Socket unix_socket(SocketType::UNIX_DOMAIN);
-    if (unix_socket.initUnixSocket(SOCKET_PATH) < 0) {
+    if (unix_socket.initUnixSocket(socket_path) < 0) {
         return 1;
     }
 
     // Remove old socket file if it exists
-    unlink(SOCKET_PATH);
+    unlink(socket_path.c_str());
 
     // Bind and listen on Unix socket
     if (unix_socket.bind() < 0) {
