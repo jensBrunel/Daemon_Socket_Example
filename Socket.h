@@ -56,11 +56,12 @@ public:
 
     /**
      * @brief Initialize a TCP socket.
-     *
-     * @param port The port number for the TCP socket.
-     * @return 0 on success, -1 on failure.
+        *
+        * @param ip The IP address to bind to (e.g. "127.0.0.1" or "0.0.0.0").
+        * @param port The port number for the TCP socket.
+        * @return 0 on success, -1 on failure.
      */
-    int initTcpSocket(int port);
+        int initTcpSocket(const std::string& ip, int port);
 
     /**
      * @brief Bind the socket to an address.
@@ -119,6 +120,7 @@ private:
     int file_descriptor_;         /**< The file descriptor for the socket */
     std::string unix_socket_path_; /**< Path for Unix domain socket */
     int tcp_port_;                /**< Port number for TCP socket */
+    std::string tcp_ip_;          /**< IP address for TCP socket */
 
     /**
      * @brief Set socket options for TCP socket.

@@ -48,7 +48,7 @@ int Socket::initUnixSocket(const std::string& socket_path)
     return 0;
 }
 
-int Socket::initTcpSocket(int port)
+int Socket::initTcpSocket(const std::string& ip, int port)
 {
     if (socket_type_ != SocketType::TCP) {
         perror("Socket type mismatch: expected TCP");
@@ -56,6 +56,7 @@ int Socket::initTcpSocket(int port)
     }
 
     tcp_port_ = port;
+    tcp_ip_ = ip;
 
     file_descriptor_ = socket(AF_INET, SOCK_STREAM, 0);
     if (file_descriptor_ < 0) {
@@ -93,8 +94,16 @@ int Socket::bind()
         struct sockaddr_in tcp_addr;
         memset(&tcp_addr, 0, sizeof(tcp_addr));
         tcp_addr.sin_family = AF_INET;
-        tcp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
         tcp_addr.sin_port = htons(tcp_port_);
+        // Convert textual IP to binary
+        if (tcp_ip_.empty()) {
+            tcp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        } else {
+            if (inet_pton(AF_INET, tcp_ip_.c_str(), &tcp_addr.sin_addr) != 1) {
+                fprintf(stderr, "invalid IP address: %s\n", tcp_ip_.c_str());
+                return -1;
+            }
+        }
 
         if (::bind(file_descriptor_, (struct sockaddr *)&tcp_addr, sizeof(tcp_addr)) < 0) {
             perror("tcp bind failed");

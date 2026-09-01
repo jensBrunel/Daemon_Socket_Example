@@ -116,7 +116,8 @@ int main()
 
     // Create TCP socket (CLI pass socket)
     Socket cliPassSocket(SocketType::TCP);
-    if (cliPassSocket.initTcpSocket(TCP_PORT) < 0) {
+    std::string tcp_ip = cfg.get("TCP_IP", std::string("127.0.0.1"));
+    if (cliPassSocket.initTcpSocket(tcp_ip, TCP_PORT) < 0) {
         unix_socket.close();
         unix_socket.cleanupUnixSocket();
         return 1;
