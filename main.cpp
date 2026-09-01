@@ -114,29 +114,29 @@ int main()
         return 1;
     }
 
-    // Create TCP socket
-    Socket tcp_socket(SocketType::TCP);
-    if (tcp_socket.initTcpSocket(TCP_PORT) < 0) {
+    // Create TCP socket (CLI pass socket)
+    Socket cliPassSocket(SocketType::TCP);
+    if (cliPassSocket.initTcpSocket(TCP_PORT) < 0) {
         unix_socket.close();
         unix_socket.cleanupUnixSocket();
         return 1;
     }
 
     // Bind and listen on TCP socket
-    if (tcp_socket.bind() < 0) {
+    if (cliPassSocket.bind() < 0) {
         unix_socket.close();
         unix_socket.cleanupUnixSocket();
         return 1;
     }
 
-    if (tcp_socket.listen(5) < 0) {
+    if (cliPassSocket.listen(5) < 0) {
         unix_socket.close();
         unix_socket.cleanupUnixSocket();
         return 1;
     }
 
     int unix_fd = unix_socket.getFileDescriptor();
-    int tcp_fd = tcp_socket.getFileDescriptor();
+    int tcp_fd = cliPassSocket.getFileDescriptor();
 
     while (1) {
         fd_set readfds;
@@ -178,7 +178,7 @@ int main()
         }
 
         if (FD_ISSET(tcp_fd, &readfds)) {
-            client_fd = tcp_socket.accept();
+            client_fd = cliPassSocket.accept();
             if (client_fd < 0) {
                 if (errno == EINTR) {
                     continue;
@@ -203,7 +203,7 @@ int main()
 
     unix_socket.close();
     unix_socket.cleanupUnixSocket();
-    tcp_socket.close();
+    cliPassSocket.close();
 
     return 0;
 }
