@@ -114,10 +114,18 @@ int main()
         return 1;
     }
 
-    // Create TCP socket (CLI pass socket)
+    // Create TCP socket (CLI pass socket) using config values
     Socket cliPassSocket(SocketType::TCP);
     std::string tcp_ip = cfg.get("TCP_IP", std::string("127.0.0.1"));
-    if (cliPassSocket.initTcpSocket(tcp_ip, TCP_PORT) < 0) {
+    std::string port_str = cfg.get("CLI_PASSTHROUGH_PORT", std::string("12345"));
+    int cli_port = 12345;
+    try {
+        cli_port = std::stoi(port_str);
+    } catch (...) {
+        fprintf(stderr, "Invalid CLI_PASSTHROUGH_PORT '%s', using 12345\n", port_str.c_str());
+    }
+
+    if (cliPassSocket.initTcpSocket(tcp_ip, cli_port) < 0) {
         unix_socket.close();
         unix_socket.cleanupUnixSocket();
         return 1;
