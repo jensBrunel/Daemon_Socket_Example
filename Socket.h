@@ -116,11 +116,11 @@ public:
     int cleanupUnixSocket();
 
 private:
-    SocketType m_socket_type_;      /**< The type of socket */
-    int m_file_descriptor_;         /**< The file descriptor for the socket */
-    std::string m_unix_socket_path_; /**< Path for Unix domain socket */
-    int m_tcp_port_;                /**< Port number for TCP socket */
-    std::string m_tcp_ip_;          /**< IP address for TCP socket */
+    SocketType m_eSocketType;      /**< The type of socket (enum) */
+    int m_iFileDescriptor;         /**< The file descriptor for the socket (int) */
+    std::string m_sUnixSocketPath; /**< Path for Unix domain socket (string) */
+    int m_iTcpPort;                /**< Port number for TCP socket (int) */
+    std::string m_sTcpIp;          /**< IP address for TCP socket (string) */
 
     /**
      * @brief Set socket options for TCP socket.

@@ -15,7 +15,7 @@ static std::string trim(const std::string &s) {
 }
 
 IniConfig::IniConfig(const std::string& ini_path)
-    : m_ini_path_(ini_path)
+    : m_sIniPath(ini_path)
 {
     load();
 }
@@ -32,8 +32,8 @@ std::string IniConfig::uppercase(const std::string& s)
 void IniConfig::load()
 {
     // If an explicit path was provided, try it first and return on success.
-    if (!m_ini_path_.empty()) {
-        std::ifstream ifs(m_ini_path_);
+    if (!m_sIniPath.empty()) {
+        std::ifstream ifs(m_sIniPath);
         if (ifs.good()) {
             std::string line;
             while (std::getline(ifs, line)) {
@@ -49,7 +49,7 @@ void IniConfig::load()
                 if (val.size() >= 2 && ((val.front() == '"' && val.back() == '"') || (val.front() == '\'' && val.back() == '\''))) {
                     val = val.substr(1, val.size() - 2);
                 }
-                m_values_[uppercase(key)] = val;
+                m_mapValues[uppercase(key)] = val;
             }
             return;
         }
@@ -83,7 +83,7 @@ void IniConfig::load()
                 val = val.substr(1, val.size() - 2);
             }
 
-            m_values_[uppercase(key)] = val;
+            m_mapValues[uppercase(key)] = val;
         }
         // stop after first readable candidate
         break;
@@ -92,8 +92,8 @@ void IniConfig::load()
 
 std::string IniConfig::get(const std::string& key) const
 {
-    auto it = m_values_.find(uppercase(key));
-    if (it != m_values_.end()) return it->second;
+    auto it = m_mapValues.find(uppercase(key));
+    if (it != m_mapValues.end()) return it->second;
     return std::string();
 }
 
