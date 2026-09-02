@@ -10,20 +10,20 @@
 
 class IniConfig {
 public:
-    IniConfig();
+    // Provide an optional path to a specific INI file. If empty, the loader
+    // will search a set of candidate locations (including /etc/ssmm/).
+    IniConfig(const std::string& ini_path = std::string());
     ~IniConfig();
 
-    // Return the value for a key (case-insensitive), or default_value if missing
-    std::string get(const std::string& key, const std::string& default_value = "") const;
-
-    // Convenience: get SOCKET_PATH with fallback
-    std::string getSocketPath() const;
+    // Return the value for a key (case-insensitive). Returns empty string if missing
+    std::string get(const std::string& key) const;
 
 private:
     void load();
     static std::string uppercase(const std::string& s);
 
     std::unordered_map<std::string, std::string> values_;
+    std::string ini_path_;
 };
 
 #endif // INI_CONFIG_H

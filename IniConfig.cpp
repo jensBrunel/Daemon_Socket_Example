@@ -14,7 +14,8 @@ static std::string trim(const std::string &s) {
     return s.substr(start, end - start + 1);
 }
 
-IniConfig::IniConfig()
+IniConfig::IniConfig(const std::string& ini_path)
+    : ini_path_(ini_path)
 {
     load();
 }
@@ -30,9 +31,34 @@ std::string IniConfig::uppercase(const std::string& s)
 
 void IniConfig::load()
 {
+    // If an explicit path was provided, try it first and return on success.
+    if (!ini_path_.empty()) {
+        std::ifstream ifs(ini_path_);
+        if (ifs.good()) {
+            std::string line;
+            while (std::getline(ifs, line)) {
+                auto pos = line.find_first_of("#;");
+                if (pos != std::string::npos) line = line.substr(0, pos);
+                line = trim(line);
+                if (line.empty()) continue;
+
+                auto eq = line.find('=');
+                if (eq == std::string::npos) continue;
+                std::string key = trim(line.substr(0, eq));
+                std::string val = trim(line.substr(eq + 1));
+                if (val.size() >= 2 && ((val.front() == '"' && val.back() == '"') || (val.front() == '\'' && val.back() == '\''))) {
+                    val = val.substr(1, val.size() - 2);
+                }
+                values_[uppercase(key)] = val;
+            }
+            return;
+        }
+    }
+
     const char* candidates[] = {
         "daemon_socket.ini",
         "config/daemon_socket.ini",
+        "/etc/ssmm/daemon_socket.ini",
         "/etc/daemon_socket.ini",
         "/etc/daemon_socket/daemon_socket.ini",
         nullptr
@@ -64,15 +90,10 @@ void IniConfig::load()
     }
 }
 
-std::string IniConfig::get(const std::string& key, const std::string& default_value) const
+std::string IniConfig::get(const std::string& key) const
 {
     auto it = values_.find(uppercase(key));
     if (it != values_.end()) return it->second;
-    return default_value;
+    return std::string();
 }
 
-std::string IniConfig::getSocketPath() const
-{
-    const std::string def = "/tmp/daemon_socket_example.sock";
-    return get("SOCKET_PATH", def);
-}
