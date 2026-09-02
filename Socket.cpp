@@ -19,28 +19,27 @@
 #include <cstdio>
 
 Socket::Socket(SocketType type)
-    : socket_type_(type), file_descriptor_(-1), tcp_port_(0)
+    : m_socket_type_(type), m_file_descriptor_(-1), m_tcp_port_(0)
 {
 }
 
 Socket::~Socket()
 {
-    if (file_descriptor_ >= 0) {
+    if (m_file_descriptor_ >= 0) {
         close();
     }
 }
 
 int Socket::initUnixSocket(const std::string& socket_path)
 {
-    if (socket_type_ != SocketType::UNIX_DOMAIN) {
+    if (m_socket_type_ != SocketType::UNIX_DOMAIN) {
         perror("Socket type mismatch: expected UNIX_DOMAIN");
         return -1;
     }
+    m_unix_socket_path_ = socket_path;
 
-    unix_socket_path_ = socket_path;
-
-    file_descriptor_ = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (file_descriptor_ < 0) {
+    m_file_descriptor_ = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (m_file_descriptor_ < 0) {
         perror("unix socket creation failed");
         return -1;
     }
@@ -50,23 +49,22 @@ int Socket::initUnixSocket(const std::string& socket_path)
 
 int Socket::initTcpSocket(const std::string& ip, int port)
 {
-    if (socket_type_ != SocketType::TCP) {
+    if (m_socket_type_ != SocketType::TCP) {
         perror("Socket type mismatch: expected TCP");
         return -1;
     }
+    m_tcp_port_ = port;
+    m_tcp_ip_ = ip;
 
-    tcp_port_ = port;
-    tcp_ip_ = ip;
-
-    file_descriptor_ = socket(AF_INET, SOCK_STREAM, 0);
-    if (file_descriptor_ < 0) {
+    m_file_descriptor_ = socket(AF_INET, SOCK_STREAM, 0);
+    if (m_file_descriptor_ < 0) {
         perror("tcp socket creation failed");
         return -1;
     }
 
     if (setTcpSocketOptions() < 0) {
-        ::close(file_descriptor_);
-        file_descriptor_ = -1;
+        ::close(m_file_descriptor_);
+        m_file_descriptor_ = -1;
         return -1;
     }
 
@@ -75,37 +73,36 @@ int Socket::initTcpSocket(const std::string& ip, int port)
 
 int Socket::bind()
 {
-    if (file_descriptor_ < 0) {
+    if (m_file_descriptor_ < 0) {
         fprintf(stderr, "Socket not initialized\n");
         return -1;
     }
 
-    if (socket_type_ == SocketType::UNIX_DOMAIN) {
+    if (m_socket_type_ == SocketType::UNIX_DOMAIN) {
         struct sockaddr_un address;
         memset(&address, 0, sizeof(address));
         address.sun_family = AF_UNIX;
-        snprintf(address.sun_path, sizeof(address.sun_path), "%s", unix_socket_path_.c_str());
+        snprintf(address.sun_path, sizeof(address.sun_path), "%s", m_unix_socket_path_.c_str());
 
-        if (::bind(file_descriptor_, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        if (::bind(m_file_descriptor_, (struct sockaddr *)&address, sizeof(address)) < 0) {
             perror("unix bind failed");
             return -1;
         }
-    } else if (socket_type_ == SocketType::TCP) {
+    } else if (m_socket_type_ == SocketType::TCP) {
         struct sockaddr_in tcp_addr;
         memset(&tcp_addr, 0, sizeof(tcp_addr));
         tcp_addr.sin_family = AF_INET;
-        tcp_addr.sin_port = htons(tcp_port_);
+        tcp_addr.sin_port = htons(m_tcp_port_);
         // Convert textual IP to binary
-        if (tcp_ip_.empty()) {
+        if (m_tcp_ip_.empty()) {
             tcp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
         } else {
-            if (inet_pton(AF_INET, tcp_ip_.c_str(), &tcp_addr.sin_addr) != 1) {
-                fprintf(stderr, "invalid IP address: %s\n", tcp_ip_.c_str());
+            if (inet_pton(AF_INET, m_tcp_ip_.c_str(), &tcp_addr.sin_addr) != 1) {
+                fprintf(stderr, "invalid IP address: %s\n", m_tcp_ip_.c_str());
                 return -1;
             }
         }
-
-        if (::bind(file_descriptor_, (struct sockaddr *)&tcp_addr, sizeof(tcp_addr)) < 0) {
+        if (::bind(m_file_descriptor_, (struct sockaddr *)&tcp_addr, sizeof(tcp_addr)) < 0) {
             perror("tcp bind failed");
             return -1;
         }
@@ -116,12 +113,11 @@ int Socket::bind()
 
 int Socket::listen(int backlog)
 {
-    if (file_descriptor_ < 0) {
+    if (m_file_descriptor_ < 0) {
         fprintf(stderr, "Socket not initialized\n");
         return -1;
     }
-
-    if (::listen(file_descriptor_, backlog) < 0) {
+    if (::listen(m_file_descriptor_, backlog) < 0) {
         perror("listen failed");
         return -1;
     }
@@ -131,12 +127,12 @@ int Socket::listen(int backlog)
 
 int Socket::accept()
 {
-    if (file_descriptor_ < 0) {
+    if (m_file_descriptor_ < 0) {
         fprintf(stderr, "Socket not initialized\n");
         return -1;
     }
 
-    int client_fd = ::accept(file_descriptor_, NULL, NULL);
+    int client_fd = ::accept(m_file_descriptor_, NULL, NULL);
     if (client_fd < 0) {
         if (errno != EINTR) {
             perror("accept failed");
@@ -149,22 +145,22 @@ int Socket::accept()
 
 int Socket::getFileDescriptor() const
 {
-    return file_descriptor_;
+    return m_file_descriptor_;
 }
 
 SocketType Socket::getSocketType() const
 {
-    return socket_type_;
+    return m_socket_type_;
 }
 
 int Socket::close()
 {
-    if (file_descriptor_ >= 0) {
-        if (::close(file_descriptor_) < 0) {
+    if (m_file_descriptor_ >= 0) {
+        if (::close(m_file_descriptor_) < 0) {
             perror("close failed");
             return -1;
         }
-        file_descriptor_ = -1;
+        m_file_descriptor_ = -1;
     }
 
     return 0;
@@ -172,12 +168,11 @@ int Socket::close()
 
 int Socket::cleanupUnixSocket()
 {
-    if (socket_type_ != SocketType::UNIX_DOMAIN) {
+    if (m_socket_type_ != SocketType::UNIX_DOMAIN) {
         fprintf(stderr, "cleanupUnixSocket: not a Unix domain socket\n");
         return -1;
     }
-
-    if (unlink(unix_socket_path_.c_str()) < 0) {
+    if (unlink(m_unix_socket_path_.c_str()) < 0) {
         perror("unlink failed");
         return -1;
     }
@@ -188,7 +183,7 @@ int Socket::cleanupUnixSocket()
 int Socket::setTcpSocketOptions()
 {
     int opt = 1;
-    if (setsockopt(file_descriptor_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+    if (setsockopt(m_file_descriptor_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("setsockopt failed");
         return -1;
     }

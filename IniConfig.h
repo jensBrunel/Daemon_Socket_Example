@@ -22,8 +22,8 @@ private:
     void load();
     static std::string uppercase(const std::string& s);
 
-    std::unordered_map<std::string, std::string> values_;
-    std::string ini_path_;
+    std::unordered_map<std::string, std::string> m_values_;
+    std::string m_ini_path_;
 };
 
 #endif // INI_CONFIG_H
