@@ -36,6 +36,21 @@ static void handle_signal(int signal_number)
     (void)signal_number;
 }
 
+static bool is_client_disconnect(int error_code)
+{
+    switch (error_code) {
+        case ECONNRESET:
+        case ENOTCONN:
+        case EPIPE:
+        case ETIMEDOUT:
+        case ECONNABORTED:
+        case EPROTO:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static int daemonize(void)
 {
     pid_t pid = fork();
@@ -98,6 +113,8 @@ int main(int argc, char** argv)
     if (daemonize() != 0) {
         return 1;
     }
+
+    signal(SIGPIPE, SIG_IGN);
 
     // Create Unix domain socket
     Socket unix_socket(SocketType::UNIX_DOMAIN);
@@ -211,9 +228,10 @@ int main(int argc, char** argv)
         if (FD_ISSET(unix_fd, &readfds)) {
             client_fd = unix_socket.accept();
             if (client_fd < 0) {
-                if (errno == EINTR) {
+                if (errno == EINTR || errno == ECONNABORTED || errno == EPROTO) {
                     continue;
                 }
+                perror("accept (unix)");
                 break;
             }
 
@@ -223,8 +241,18 @@ int main(int argc, char** argv)
                 fflush(stdout);
             }
 
-            if (received < 0 && errno != EINTR) {
-                perror("recv (unix)");
+            if (received == 0) {
+                fprintf(stderr, "peer disconnected on unix socket\n");
+            } else if (received < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                if (is_client_disconnect(errno)) {
+                    fprintf(stderr, "client disconnected on unix socket\n");
+                } else {
+                    perror("recv (unix)");
+                    break;
+                }
             }
 
             close(client_fd);
@@ -234,9 +262,10 @@ int main(int argc, char** argv)
         if (FD_ISSET(tcp_cliFd, &readfds)) {
             client_fd = cliPassSocket.accept();
             if (client_fd < 0) {
-                if (errno == EINTR) {
+                if (errno == EINTR || errno == ECONNABORTED || errno == EPROTO) {
                     continue;
                 }
+                perror("accept (tcp cli)");
                 break;
             }
 
@@ -246,35 +275,57 @@ int main(int argc, char** argv)
                 fflush(stdout);
             }
 
-            if (received < 0 && errno != EINTR) {
-                perror("recv (tcp)");
+            if (received == 0) {
+                fprintf(stderr, "peer disconnected on cli socket\n");
+            } else if (received < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                if (is_client_disconnect(errno)) {
+                    fprintf(stderr, "client disconnected on cli socket\n");
+                } else {
+                    perror("recv (tcp)");
+                    break;
+                }
             }
 
             close(client_fd);
             client_fd = -1;
         }
-            if (FD_ISSET(tcp_cfgFd, &readfds)) {
-                client_fd = configSocket.accept();
-                if (client_fd < 0) {
-                    if (errno == EINTR) {
-                        continue;
-                    }
+
+        if (FD_ISSET(tcp_cfgFd, &readfds)) {
+            client_fd = configSocket.accept();
+            if (client_fd < 0) {
+                if (errno == EINTR || errno == ECONNABORTED || errno == EPROTO) {
+                    continue;
+                }
+                perror("accept (tcp cfg)");
+                break;
+            }
+
+            while ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+                buffer[received] = '\0';
+                printf("[cfg] Received: %s\n", buffer);
+                fflush(stdout);
+            }
+
+            if (received == 0) {
+                fprintf(stderr, "peer disconnected on config socket\n");
+            } else if (received < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                if (is_client_disconnect(errno)) {
+                    fprintf(stderr, "client disconnected on config socket\n");
+                } else {
+                    perror("recv (config)");
                     break;
                 }
-
-                while ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
-                    buffer[received] = '\0';
-                    printf("[cfg] Received: %s\n", buffer);
-                    fflush(stdout);
-                }
-
-                if (received < 0 && errno != EINTR) {
-                    perror("recv (config)");
-                }
-
-                close(client_fd);
-                client_fd = -1;
             }
+
+            close(client_fd);
+            client_fd = -1;
+        }
     }
     unix_socket.close();
     unix_socket.cleanupUnixSocket();
