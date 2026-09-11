@@ -10,13 +10,15 @@
  */
 
 #include "Socket.h"
+#include <algorithm>
+#include <cerrno>
 #include <cstring>
+#include <iostream>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <cstdio>
 
 Socket::Socket(SocketType type)
     : m_eSocketType(type), m_iFileDescriptor(-1), m_iTcpPort(0)
@@ -33,14 +35,14 @@ Socket::~Socket()
 int Socket::initUnixSocket(const std::string& socket_path)
 {
     if (m_eSocketType != SocketType::UNIX_DOMAIN) {
-        perror("Socket type mismatch: expected UNIX_DOMAIN");
+        std::cerr << "Socket type mismatch: expected UNIX_DOMAIN\n";
         return -1;
     }
     m_sUnixSocketPath = socket_path;
 
     m_iFileDescriptor = socket(AF_UNIX, SOCK_STREAM, 0);
     if (m_iFileDescriptor < 0) {
-        perror("unix socket creation failed");
+        std::cerr << "unix socket creation failed: " << std::strerror(errno) << '\n';
         return -1;
     }
 
@@ -50,7 +52,7 @@ int Socket::initUnixSocket(const std::string& socket_path)
 int Socket::initTcpSocket(const std::string& ip, int port)
 {
     if (m_eSocketType != SocketType::TCP) {
-        perror("Socket type mismatch: expected TCP");
+        std::cerr << "Socket type mismatch: expected TCP\n";
         return -1;
     }
     m_iTcpPort = port;
@@ -58,7 +60,7 @@ int Socket::initTcpSocket(const std::string& ip, int port)
 
     m_iFileDescriptor = socket(AF_INET, SOCK_STREAM, 0);
     if (m_iFileDescriptor < 0) {
-        perror("tcp socket creation failed");
+        std::cerr << "tcp socket creation failed: " << std::strerror(errno) << '\n';
         return -1;
     }
 
@@ -74,23 +76,27 @@ int Socket::initTcpSocket(const std::string& ip, int port)
 int Socket::bind()
 {
     if (m_iFileDescriptor < 0) {
-        fprintf(stderr, "Socket not initialized\n");
+        std::cerr << "Socket not initialized\n";
         return -1;
     }
 
     if (m_eSocketType == SocketType::UNIX_DOMAIN) {
-        struct sockaddr_un address;
-        memset(&address, 0, sizeof(address));
+        sockaddr_un address{};
         address.sun_family = AF_UNIX;
-        snprintf(address.sun_path, sizeof(address.sun_path), "%s", m_sUnixSocketPath.c_str());
 
-        if (::bind(m_iFileDescriptor, (struct sockaddr *)&address, sizeof(address)) < 0) {
-            perror("unix bind failed");
+        if (m_sUnixSocketPath.size() >= sizeof(address.sun_path)) {
+            std::cerr << "Unix socket path too long: " << m_sUnixSocketPath << '\n';
+            return -1;
+        }
+        std::copy(m_sUnixSocketPath.begin(), m_sUnixSocketPath.end(), address.sun_path);
+        address.sun_path[m_sUnixSocketPath.size()] = '\0';
+
+        if (::bind(m_iFileDescriptor, reinterpret_cast<struct sockaddr *>(&address), sizeof(address)) < 0) {
+            std::cerr << "unix bind failed: " << std::strerror(errno) << '\n';
             return -1;
         }
     } else if (m_eSocketType == SocketType::TCP) {
-        struct sockaddr_in tcp_addr;
-        memset(&tcp_addr, 0, sizeof(tcp_addr));
+        sockaddr_in tcp_addr{};
         tcp_addr.sin_family = AF_INET;
         tcp_addr.sin_port = htons(m_iTcpPort);
         // Convert textual IP to binary
@@ -98,12 +104,12 @@ int Socket::bind()
             tcp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
         } else {
             if (inet_pton(AF_INET, m_sTcpIp.c_str(), &tcp_addr.sin_addr) != 1) {
-                fprintf(stderr, "invalid IP address: %s\n", m_sTcpIp.c_str());
+                std::cerr << "invalid IP address: " << m_sTcpIp << '\n';
                 return -1;
             }
         }
-        if (::bind(m_iFileDescriptor, (struct sockaddr *)&tcp_addr, sizeof(tcp_addr)) < 0) {
-            perror("tcp bind failed");
+        if (::bind(m_iFileDescriptor, reinterpret_cast<struct sockaddr *>(&tcp_addr), sizeof(tcp_addr)) < 0) {
+            std::cerr << "tcp bind failed: " << std::strerror(errno) << '\n';
             return -1;
         }
     }
@@ -114,11 +120,11 @@ int Socket::bind()
 int Socket::listen(int backlog)
 {
     if (m_iFileDescriptor < 0) {
-        fprintf(stderr, "Socket not initialized\n");
+        std::cerr << "Socket not initialized\n";
         return -1;
     }
     if (::listen(m_iFileDescriptor, backlog) < 0) {
-        perror("listen failed");
+        std::cerr << "listen failed: " << std::strerror(errno) << '\n';
         return -1;
     }
 
@@ -128,14 +134,14 @@ int Socket::listen(int backlog)
 int Socket::accept()
 {
     if (m_iFileDescriptor < 0) {
-        fprintf(stderr, "Socket not initialized\n");
+        std::cerr << "Socket not initialized\n";
         return -1;
     }
 
-    int client_fd = ::accept(m_iFileDescriptor, NULL, NULL);
+    int client_fd = ::accept(m_iFileDescriptor, nullptr, nullptr);
     if (client_fd < 0) {
         if (errno != EINTR) {
-            perror("accept failed");
+            std::cerr << "accept failed: " << std::strerror(errno) << '\n';
         }
         return -1;
     }
@@ -157,7 +163,7 @@ int Socket::close()
 {
     if (m_iFileDescriptor >= 0) {
         if (::close(m_iFileDescriptor) < 0) {
-            perror("close failed");
+            std::cerr << "close failed: " << std::strerror(errno) << '\n';
             return -1;
         }
         m_iFileDescriptor = -1;
@@ -169,11 +175,11 @@ int Socket::close()
 int Socket::cleanupUnixSocket()
 {
     if (m_eSocketType != SocketType::UNIX_DOMAIN) {
-        fprintf(stderr, "cleanupUnixSocket: not a Unix domain socket\n");
+        std::cerr << "cleanupUnixSocket: not a Unix domain socket\n";
         return -1;
     }
     if (unlink(m_sUnixSocketPath.c_str()) < 0) {
-        perror("unlink failed");
+        std::cerr << "unlink failed: " << std::strerror(errno) << '\n';
         return -1;
     }
 
@@ -184,7 +190,7 @@ int Socket::setTcpSocketOptions()
 {
     int opt = 1;
     if (setsockopt(m_iFileDescriptor, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        perror("setsockopt failed");
+        std::cerr << "setsockopt failed: " << std::strerror(errno) << '\n';
         return -1;
     }
 

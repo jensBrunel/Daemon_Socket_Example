@@ -13,11 +13,12 @@
 
 #include "Socket.h"
 #include "IniConfig.h"
-#include <errno.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cerrno>
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <string>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -26,17 +27,23 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <string>
 
 #define BUFFER_SIZE 256
 #define TCP_PORT 12345
 
-static void handle_signal(int signal_number)
+namespace {
+
+void log_errno(const std::string& context)
+{
+    std::cerr << context << ": " << std::strerror(errno) << '\n';
+}
+
+void handle_signal(int signal_number)
 {
     (void)signal_number;
 }
 
-static bool is_client_disconnect(int error_code)
+bool is_client_disconnect(int error_code)
 {
     switch (error_code) {
         case ECONNRESET:
@@ -51,51 +58,59 @@ static bool is_client_disconnect(int error_code)
     }
 }
 
-static int daemonize(void)
+int daemonize()
 {
     pid_t pid = fork();
 
     if (pid < 0) {
-        perror("fork");
+        log_errno("fork");
         return -1;
     }
 
     if (pid > 0) {
-        exit(0);
+        std::exit(0);
     }
 
     if (setsid() < 0) {
-        perror("setsid");
+        log_errno("setsid");
         return -1;
     }
 
-    signal(SIGCHLD, SIG_IGN);
-    signal(SIGHUP, SIG_IGN);
-    signal(SIGTERM, handle_signal);
+    std::signal(SIGCHLD, SIG_IGN);
+    std::signal(SIGHUP, SIG_IGN);
+    std::signal(SIGTERM, handle_signal);
 
     pid = fork();
     if (pid < 0) {
-        perror("second fork");
+        log_errno("second fork");
         return -1;
     }
 
     if (pid > 0) {
-        exit(0);
+        std::exit(0);
     }
 
     umask(0);
 
     if (chdir("/") < 0) {
-        perror("chdir");
+        log_errno("chdir");
         return -1;
     }
 
-    close(STDIN_FILENO);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
+    if (close(STDIN_FILENO) < 0) {
+        log_errno("close STDIN_FILENO");
+    }
+    if (close(STDOUT_FILENO) < 0) {
+        log_errno("close STDOUT_FILENO");
+    }
+    if (close(STDERR_FILENO) < 0) {
+        log_errno("close STDERR_FILENO");
+    }
 
     return 0;
 }
+
+} // namespace
 
 int main(int argc, char** argv)
 {
@@ -110,11 +125,11 @@ int main(int argc, char** argv)
     std::string socket_path = cfg.get("SOCKET_PATH");
     if (socket_path.empty()) socket_path = "/tmp/daemon_socket_example.sock";
 
-    if (daemonize() != 0) {
-        return 1;
-    }
+    //if (daemonize() != 0) {
+    //    return 1;
+    //}
 
-    signal(SIGPIPE, SIG_IGN);
+    std::signal(SIGPIPE, SIG_IGN);
 
     // Create Unix domain socket
     Socket unix_socket(SocketType::UNIX_DOMAIN);
@@ -144,7 +159,8 @@ int main(int argc, char** argv)
         try {
             cli_port = std::stoi(port_str);
         } catch (...) {
-            fprintf(stderr, "Invalid CLI_PASSTHROUGH_PORT '%s', using 12345\n", port_str.c_str());
+            std::cerr << "Invalid CLI_PASSTHROUGH_PORT '" << port_str
+                      << "', using 12345\n";
         }
     }
 
@@ -175,7 +191,8 @@ int main(int argc, char** argv)
     int config_port = 22345;
     if (!config_port_str.empty()) {
         try { config_port = std::stoi(config_port_str); } catch (...) {
-            fprintf(stderr, "Invalid CONFIG_PORT '%s', using 22345\n", config_port_str.c_str());
+            std::cerr << "Invalid CONFIG_PORT '" << config_port_str
+                      << "', using 22345\n";
         }
     }
 
@@ -208,20 +225,20 @@ int main(int argc, char** argv)
 
     while (1) {
         fd_set readfds;
-            int max_fd = unix_fd;
-            if (tcp_cliFd > max_fd) max_fd = tcp_cliFd;
-            if (tcp_cfgFd > max_fd) max_fd = tcp_cfgFd;
+        int max_fd = unix_fd;
+        if (tcp_cliFd > max_fd) max_fd = tcp_cliFd;
+        if (tcp_cfgFd > max_fd) max_fd = tcp_cfgFd;
 
         FD_ZERO(&readfds);
         FD_SET(unix_fd, &readfds);
-            FD_SET(tcp_cliFd, &readfds);
-            FD_SET(tcp_cfgFd, &readfds);
+        FD_SET(tcp_cliFd, &readfds);
+        FD_SET(tcp_cfgFd, &readfds);
 
-        if (select(max_fd + 1, &readfds, NULL, NULL, NULL) < 0) {
+        if (select(max_fd + 1, &readfds, nullptr, nullptr, nullptr) < 0) {
             if (errno == EINTR) {
                 continue;
             }
-            perror("select");
+            log_errno("select");
             break;
         }
 
@@ -231,33 +248,49 @@ int main(int argc, char** argv)
                 if (errno == EINTR || errno == ECONNABORTED || errno == EPROTO) {
                     continue;
                 }
-                perror("accept (unix)");
+                log_errno("accept (unix)");
                 break;
             }
 
-            while ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+            std::cout << "Unix socket accepted connection, fd: " << client_fd << '\n';
+            if((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
                 buffer[received] = '\0';
-                printf("Unix Received: %s\n", buffer);
-                fflush(stdout);
+                char sendBuffer[BUFFER_SIZE];
+                std::string message(buffer);
+                std::string StatusConfig = R"(
+/-----------------------
+/- Status overview
+/-----------------------
+Port1: Active
+Port2: Inactive
+Port3: Active
+/-----------------------
+                )";
+                StatusConfig.append('\0', StatusConfig.size());
+                memcpy(sendBuffer, StatusConfig.c_str(), StatusConfig.size());
+                sendBuffer[StatusConfig.size()] = '\0';
+                std::cout << "Unix Received: " << message << '\n';
+                send(client_fd, sendBuffer, StatusConfig.size() + 1, 0);
             }
 
             if (received == 0) {
-                fprintf(stderr, "peer disconnected on unix socket\n");
+                std::cerr << "peer disconnected on unix socket\n";
             } else if (received < 0) {
                 if (errno == EINTR) {
+                    std::cerr << "recv interrupted by signal, continuing\n";
                     continue;
                 }
                 if (is_client_disconnect(errno)) {
-                    fprintf(stderr, "client disconnected on unix socket\n");
+                    std::cerr << "client disconnected on unix socket\n";
                 } else {
-                    perror("recv (unix)");
+                    log_errno("recv (unix)");
                     break;
                 }
             }
 
             close(client_fd);
             client_fd = -1;
-        }
+    }
 
         if (FD_ISSET(tcp_cliFd, &readfds)) {
             client_fd = cliPassSocket.accept();
@@ -265,30 +298,31 @@ int main(int argc, char** argv)
                 if (errno == EINTR || errno == ECONNABORTED || errno == EPROTO) {
                     continue;
                 }
-                perror("accept (tcp cli)");
+                log_errno("accept (tcp cli)");
                 break;
             }
 
-            while ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+            if ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
                 buffer[received] = '\0';
-                printf("[cli] Received: %s\n", buffer);
-                fflush(stdout);
+                std::string message(buffer);
+                //std::cout << "[cli] Received: " << message << '\n';
             }
 
             if (received == 0) {
-                fprintf(stderr, "peer disconnected on cli socket\n");
+                std::cerr << "peer disconnected on cli socket\n";
             } else if (received < 0) {
                 if (errno == EINTR) {
+                    std::cerr << "recv interrupted by signal, continuing\n";
                     continue;
                 }
                 if (is_client_disconnect(errno)) {
-                    fprintf(stderr, "client disconnected on cli socket\n");
+                    std::cerr << "client disconnected on cli socket\n";
                 } else {
-                    perror("recv (tcp)");
+                    log_errno("recv (tcp)");
                     break;
                 }
             }
-
+            std::cout << "Closing client_fd: " << client_fd << '\n';
             close(client_fd);
             client_fd = -1;
         }
@@ -299,26 +333,26 @@ int main(int argc, char** argv)
                 if (errno == EINTR || errno == ECONNABORTED || errno == EPROTO) {
                     continue;
                 }
-                perror("accept (tcp cfg)");
+                log_errno("accept (tcp cfg)");
                 break;
             }
 
-            while ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+            if ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0) {
                 buffer[received] = '\0';
-                printf("[cfg] Received: %s\n", buffer);
-                fflush(stdout);
+                std::string message(buffer);
+                std::cout << "[cfg] Received: " << message << '\n';
             }
 
             if (received == 0) {
-                fprintf(stderr, "peer disconnected on config socket\n");
+                std::cerr << "peer disconnected on config socket\n";
             } else if (received < 0) {
                 if (errno == EINTR) {
                     continue;
                 }
                 if (is_client_disconnect(errno)) {
-                    fprintf(stderr, "client disconnected on config socket\n");
+                    std::cerr << "client disconnected on config socket\n";
                 } else {
-                    perror("recv (config)");
+                    log_errno("recv (config)");
                     break;
                 }
             }
