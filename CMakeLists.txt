@@ -47,7 +47,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall -Wextra")
 
 # Sources (C++ entrypoint)
-add_executable(daemon_socket_example main.cpp Socket.cpp IniConfig.cpp)
+add_executable(daemon_socket_example main.cpp Socket.cpp IniConfig.cpp ConfigParser.cpp)
 
 # Install target
 install(TARGETS daemon_socket_example DESTINATION bin)
@@ -79,3 +79,12 @@ add_custom_target(ninja_build
 
 # Link RapidJSON headers (header-only INTERFACE target provided by RapidJSON)
 target_link_libraries(daemon_socket_example PRIVATE RapidJSON)
+
+# Build and link QuickDigest5 (small third-party implementation)
+add_library(QuickDigest5 STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QuickDigest5/quickdigest5.cpp
+)
+target_include_directories(QuickDigest5 PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QuickDigest5
+)
+target_link_libraries(daemon_socket_example PRIVATE QuickDigest5)
