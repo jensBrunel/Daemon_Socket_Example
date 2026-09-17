@@ -343,6 +343,8 @@ Port3: Active
                 else if (!vecTokens.empty() && vecTokens.front() == "copy")
                 {
                     std::cout << "Received 'copy' command on unix socket\n";
+                    ConfigParser configParser(vecTokens[1]);
+                    ConfigSerializer configSerializer(configParser);
                     std::string copyConfig = "copy " + vecTokens[1];
                     std::memset(sendBuffer, 0, sizeof(sendBuffer));
                     std::memcpy(sendBuffer, copyConfig.c_str(), copyConfig.size());
