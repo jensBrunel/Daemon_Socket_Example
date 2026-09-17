@@ -10,6 +10,8 @@
 #ifndef CONFIG_SERIALIZER_H
 #define CONFIG_SERIALIZER_H
 
+#include <string>
+#include <vector>
 #include "ConfigParser.h"
 
 class ConfigSerializer {
@@ -23,7 +25,10 @@ public:
      ConfigSerializer(const ConfigParser &config);
 
 private:
+    const std::vector<std::string> serialize();
+    
     const ConfigParser& m_config;
+    
 };
 
 

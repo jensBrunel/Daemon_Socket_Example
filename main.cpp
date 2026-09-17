@@ -14,6 +14,7 @@
 #include "Socket.h"
 #include "IniConfig.h"
 #include "ConfigParser.h"
+#include "ConfigSerializer.h"
 #include <cerrno>
 #include <csignal>
 #include <cstdlib>
@@ -333,6 +334,7 @@ Port3: Active
                 {
                     std::cout << "Received 'set' command on unix socket\n";
                     ConfigParser configParser(vecTokens[1]);
+                    ConfigSerializer configSerializer(configParser);
                     std::string setConfig = "set " + vecTokens[1];
                     std::memset(sendBuffer, 0, sizeof(sendBuffer));
                     std::memcpy(sendBuffer, setConfig.c_str(), setConfig.size());

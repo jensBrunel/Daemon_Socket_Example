@@ -3,6 +3,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "rapidjson/document.h"
 #include <fstream>
@@ -26,6 +27,13 @@ public:
      * @return true if the file was opened and parsed successfully, false otherwise.
      */
     bool Open(const std::string &strPath);
+
+
+    /**
+     * @brief Get the stored config array as a const reference.
+     * @return Reference to the config array.
+     */
+    const std::vector<std::string> &GetConfigArray() const;
 
     /**
      * @brief Get a configuration value by key.
@@ -69,6 +77,7 @@ private:
     std::unordered_map<std::string, std::string> m_mapValues;
     std::string m_strPath;
     std::ifstream m_stream;
+    std::vector<std::string> m_configArray; // Store the Configuration array as strings
 };
 
 #endif // CONFIGPARSER_H

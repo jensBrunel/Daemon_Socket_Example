@@ -137,10 +137,12 @@ void ConfigParser::Load() {
     if (configIter != document.MemberEnd() && configIter->value.IsArray()) {
         for (const auto& configParameter : configIter->value.GetArray()) {
             if (configParameter.IsObject()) {
-                //const auto cmdIt = configParameter.FindMember("command");
+                const auto cmdIt = configParameter.FindMember("command");
                 //std::cout << "Command: " << cmdIt->value.GetString() << std::endl;
+                m_configArray.push_back(cmdIt->value.GetString());
             }
         }
+        std::cout << "Loaded Configuration array with " << m_configArray.size() << " entries." << std::endl;
     }
     const rapidjson::Value& configArray = document["Configuration"];
     rapidjson::StringBuffer configBuffer;
@@ -165,6 +167,10 @@ void ConfigParser::Load() {
 
     m_mapValues.clear();
     ParseValue(document, "");
+}
+
+const std::vector<std::string> &ConfigParser::GetConfigArray() const {
+    return m_configArray;
 }
 
 std::string ConfigParser::GetValue(const std::string &strKey) const {
