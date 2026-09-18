@@ -23,11 +23,14 @@ public:
 
      ConfigSerializer();
      explicit ConfigSerializer(const ConfigParser &config);
+     bool wasSerialized() const;
 
 private:
     const std::vector<std::string> serialize();
+    bool writeConfigToTextFile(const std::string &filePath) const;
     
     const ConfigParser& m_config;
+    bool m_serializeSuccess;
     
 };
 

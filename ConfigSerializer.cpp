@@ -16,6 +16,11 @@ ConfigSerializer::ConfigSerializer(const ConfigParser &config) : m_config(config
     serialize();
 }
 
+bool ConfigSerializer::wasSerialized() const
+{
+    return m_serializeSuccess;
+}
+
 const std::vector<std::string> ConfigSerializer::serialize()
 {
     auto configArray = m_config.GetConfigArray();
@@ -23,5 +28,24 @@ const std::vector<std::string> ConfigSerializer::serialize()
     {
         std::cout << "Config entry: " << entry << std::endl;
     }
+    m_serializeSuccess = !configArray.empty();
     return configArray;
+}
+
+bool ConfigSerializer::writeConfigToTextFile(const std::string &filePath) const
+{
+    std::ofstream out(filePath, std::ios::out | std::ios::trunc);
+
+    if (!out.is_open())
+    {
+        return false;
+    }
+
+    for (const auto &entry : m_config.GetConfigArray())
+    {
+        out << entry << '\n';
+    }
+
+    out.close();
+    return out.good();
 }
