@@ -22,7 +22,7 @@ public:
      **/
 
      ConfigSerializer();
-     ConfigSerializer(const ConfigParser &config);
+     explicit ConfigSerializer(const ConfigParser &config);
 
 private:
     const std::vector<std::string> serialize();

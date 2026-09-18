@@ -12,7 +12,7 @@ class IniConfig {
 public:
     // Provide an optional path to a specific INI file. If empty, the loader
     // will search a set of candidate locations (including /etc/ssmm/).
-    IniConfig(const std::string& ini_path = std::string());
+    explicit IniConfig(const std::string& ini_path = std::string());
     ~IniConfig();
 
     // Return the value for a key (case-insensitive). Returns empty string if missing

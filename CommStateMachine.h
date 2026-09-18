@@ -29,7 +29,7 @@ enum CommState
 class CommStateMachine
 {
 public:
-    CommStateMachine(int fileDescriptor);
+    explicit CommStateMachine(int fileDescriptor);
     void handleStateTransition();
 private:
     void transitionToNextState();

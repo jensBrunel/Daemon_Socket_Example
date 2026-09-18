@@ -38,7 +38,7 @@ void IniConfig::load()
             std::string line;
             while (std::getline(ifs, line)) {
                 auto pos = line.find_first_of("#;");
-                if (pos != std::string::npos) line = line.substr(0, pos);
+                if (pos != std::string::npos) line.pop_back();
                 line = trim(line);
                 if (line.empty()) continue;
 
@@ -71,7 +71,7 @@ void IniConfig::load()
         std::string line;
             while (std::getline(ifs, line)) {
             auto pos = line.find_first_of("#;");
-            if (pos != std::string::npos) line = line.substr(0, pos);
+            if (pos != std::string::npos) line.pop_back();
             line = trim(line);
             if (line.empty()) continue;
 

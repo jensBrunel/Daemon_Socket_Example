@@ -313,7 +313,7 @@ int main(int argc, char **argv)
                 }
 
                 std::cout << "Unix Received tokens: " << vecTokens.front() << std::endl;
-                if (!vecTokens.empty() && vecTokens.front() == "switch_status")
+                if (vecTokens.front() == "switch_status")
                 {
                     std::cout << "Received 'status' command on unix socket\n";
                     std::string statusConfig = R"(
@@ -330,7 +330,7 @@ Port3: Active
                     std::cout << "Unix Received: " << message << '\n';
                     send(client_fd, sendBuffer, statusConfig.size(), 0);
                 }
-                else if (!vecTokens.empty() && vecTokens.front() == "set")
+                else if (vecTokens.front() == "set")
                 {
                     std::cout << "Received 'set' command on unix socket\n";
                     ConfigParser configParser(vecTokens[1]);
@@ -340,7 +340,7 @@ Port3: Active
                     std::memcpy(sendBuffer, setConfig.c_str(), setConfig.size());
                     send(client_fd, sendBuffer, setConfig.size(), 0);
                 }
-                else if (!vecTokens.empty() && vecTokens.front() == "copy")
+                else if (vecTokens.front() == "copy")
                 {
                     std::cout << "Received 'copy' command on unix socket\n";
                     ConfigParser configParser(vecTokens[1]);
@@ -394,7 +394,7 @@ Port3: Active
             if ((received = recv(client_fd, buffer, sizeof(buffer) - 1, 0)) > 0)
             {
                 buffer[received] = '\0';
-                std::string message(buffer);
+                //std::string message(buffer);
                 // std::cout << "[cli] Received: " << message << '\n';
             }
 

@@ -67,22 +67,6 @@ ConfigParser::ConfigParser(const std::string &strPath) : m_strPath(strPath) {
     Load();
 }
 
-bool ConfigParser::Open(const std::string &strPath) {
-    m_strPath = strPath;
-    m_mapValues.clear();
-    std::cout << "Opening config file: " << m_strPath << std::endl;
-    Load();
-    return !m_strPath.empty();
-}
-
-bool ConfigParser::IsOpen() const {
-    return !m_strPath.empty();
-}
-
-const std::string &ConfigParser::GetPath() const {
-    return m_strPath;
-}
-
 void ConfigParser::ParseValue(const rapidjson::Value &value, const std::string &strPrefix) {
     if (value.IsObject()) {
         for (auto it = value.MemberBegin(); it != value.MemberEnd(); ++it) {
@@ -173,22 +157,3 @@ const std::vector<std::string> &ConfigParser::GetConfigArray() const {
     return m_configArray;
 }
 
-std::string ConfigParser::GetValue(const std::string &strKey) const {
-    const auto it = m_mapValues.find(Uppercase(strKey));
-    if (it == m_mapValues.end()) {
-        return "";
-    }
-    return it->second;
-}
-
-std::string ConfigParser::GetValue(const std::string &arrayKey, const std::string &strKey) const {
-    const auto it = m_mapValues.find(Uppercase(arrayKey + "." + strKey));
-    if (it == m_mapValues.end()) {
-        return "";
-    }
-    return it->second;
-}
-
-bool ConfigParser::HasKey(const std::string &strKey) const {
-    return m_mapValues.find(Uppercase(strKey)) != m_mapValues.end();
-}
