@@ -4,6 +4,7 @@
  */
 #include <iostream>
 #include "ConfigSerializer.h"
+#include "third_party/CRC32/Crc32.h"
 
 // TODO: Implement serialization and deserialization helpers declared
 // in ConfigSerializer.h. This file intentionally provides a neutral
@@ -46,6 +47,25 @@ bool ConfigSerializer::writeConfigToTextFile(const std::string &filePath) const
         out << entry << '\n';
     }
 
-    out.close();
     return out.good();
+}
+
+uint32_t ConfigSerializer::crc32FromTextFile(const std::string &filePath) const
+{
+    uint32_t crc32 = 0;
+    char* data;
+    std::ifstream file(filePath, std::ios::out | std::ios::trunc);
+
+    if (file.is_open())
+    {
+        file.seekg(0, std::ios::end);
+        std::streamsize size = file.tellg();
+        file.seekg(0, std::ios::beg);   
+
+        data = new char[size];
+
+        crc32 = crc32_bitwise(data, size);
+    }
+
+    return crc32;
 }

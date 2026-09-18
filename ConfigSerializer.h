@@ -28,6 +28,7 @@ public:
 private:
     const std::vector<std::string> serialize();
     bool writeConfigToTextFile(const std::string &filePath) const;
+    uint32_t crc32FromTextFile(const std::string &filePath) const;
     
     const ConfigParser& m_config;
     bool m_serializeSuccess;

@@ -88,3 +88,27 @@ target_include_directories(QuickDigest5 PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QuickDigest5
 )
 target_link_libraries(daemon_socket_example PRIVATE QuickDigest5)
+
+# Build and link CRC32 (supports thirdparty/CRC32 and third_party/CRC32)
+set(CRC32_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/CRC32")
+if(NOT EXISTS "${CRC32_DIR}")
+  set(CRC32_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/CRC32")
+endif()
+
+if(EXISTS "${CRC32_DIR}")
+  if(EXISTS "${CRC32_DIR}/CMakeLists.txt")
+    add_subdirectory("${CRC32_DIR}")
+  else()
+    file(GLOB CRC32_SOURCES CONFIGURE_DEPENDS
+      "${CRC32_DIR}/*.cpp"
+      "${CRC32_DIR}/*.cc"
+      "${CRC32_DIR}/*.c"
+    )
+
+    if(CRC32_SOURCES)
+      add_library(CRC32 STATIC ${CRC32_SOURCES})
+      target_include_directories(CRC32 PUBLIC "${CRC32_DIR}")
+      target_link_libraries(daemon_socket_example PRIVATE CRC32)
+    endif()
+  endif()
+endif()
